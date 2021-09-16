@@ -25,6 +25,13 @@ buttonInputs = [
   input' pin2 [False, True, False, False, False, True, False, False, False, False, True, False, False, True, False],
   input' pin3 [False, False, True, False, False, True, False, True, False, True, False, True, False, True, False]
   ]
+  
+presets :: [[Behavior LoopMap]]
+presets = [
+    (map constant [0,0,0,0,0,0,0,0]),
+    (map constant [0,0,0,0,0,0,0,0]),
+    (map constant [0,0,0,0,0,0,0,0])
+  ]
 
 main :: IO()
 main = arduino $ do
@@ -42,4 +49,4 @@ main = arduino $ do
   pin9 =: held parsedInput
   pin10 =: pwm (code parsedInput)
   
-  pin11 =: pwm (getActiveLoopMap parsedInput (constant 3))
+  pin11 =: pwm (getActiveLoopMap parsedInput (constant 3) presets)

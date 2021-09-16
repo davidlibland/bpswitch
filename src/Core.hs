@@ -1,5 +1,5 @@
 {-# LANGUAGE RebindableSyntax #-}
-module Core (getActiveLoopMap) where
+module Core (getActiveLoopMap, LoopMap) where
 
 import Copilot.Arduino.Nano -- Copilot.Arduino.Nano is also available
 import BPSStates
@@ -27,6 +27,9 @@ locations :: [[Bool]]
 locations = [loc0, loc1, loc2, loc3, loc4, loc5, loc6, loc7]
 --locationCodes :: [Word8]
 --locationCodes = map (foldl1 (\x y -> 2*x+y)) $ map (map (\b-> if b then 1 else 0)) locations
+numLocations = length locations
+numLocations8 :: Word8
+numLocations8 = fromIntegral numLocations
 
 -- Pedals
 pedalPress :: [ParsedInput]
@@ -45,32 +48,48 @@ raisePastInsert :: Word8 -> Behavior Word8 -> Behavior LoopMap
 raisePastInsert i insertLoc = if insertLoc > constant i then constant (2P.^i) else constant 2P.^(i+1)
 
 getInputLoopMap :: ParsedInput -> Behavior Word8 -> Behavior LoopMap
-getInputLoopMap input insertLoc =
-  if input === (pedalPress P.!! 0) then raisePastInsert 0 insertLoc else
-  if input === (pedalPress P.!! 1) then raisePastInsert 1 insertLoc else
-  if input === (pedalPress P.!! 2) then raisePastInsert 2 insertLoc else
-  if input === (pedalPress P.!! 3) then raisePastInsert 3 insertLoc else
-  if input === (pedalPress P.!! 4) then raisePastInsert 4 insertLoc else
-  if input === (pedalPress P.!! 5) then raisePastInsert 5 insertLoc else
-  if input === (pedalPress P.!! 6) then raisePastInsert 6 insertLoc else
-  if input === (pedalPress P.!! 7) then raisePastInsert 7 insertLoc else constant 0
+getInputLoopMap inputPress insertLoc = helper 0 pedalPress
+  where
+    helper i (pedal:pedals) = if inputPress === pedal then raisePastInsert i insertLoc else helper (i+1) pedals
+    helper _ [] = constant 0
 
 getInsertLoopMap :: Behavior Word8 -> Behavior LoopMap
 getInsertLoopMap insertLoc = (constant 2)^insertLoc
 
 getIsLoopMode :: ParsedInput -> Behavior Bool
-getIsLoopMode input = isLoopMode where
+getIsLoopMode inputPress = isLoopMode where
   prevIsLoopMode = [True] ++ isLoopMode
-  isLoopMode = (input === modePress) `xor` prevIsLoopMode
-  
+  isLoopMode = (inputPress === modePress) `xor` prevIsLoopMode
+
 getLoopModeLoopMap :: ParsedInput -> Behavior Word8 -> Behavior LoopMap
-getLoopModeLoopMap input insertLoc = activeLoopMap where
+getLoopModeLoopMap inputPress insertLoc = activeLoopMap where
   prevPedalLoopMap = [0] ++ pedalLoopMap
-  isLoopMode = getIsLoopMode input
-  toggleCode = if isLoopMode then getInputLoopMap input insertLoc else constant 0
+  isLoopMode = getIsLoopMode inputPress
+  toggleCode = if isLoopMode then getInputLoopMap inputPress insertLoc else constant 0
   pedalLoopMap = toggleCode .^. prevPedalLoopMap
   activeLoopMap = pedalLoopMap .|. (getInsertLoopMap insertLoc)
 
+getWhichBankMode :: ParsedInput -> Behavior Word8
+getWhichBankMode inputPress = whichBankMode where
+  prevBankMode = [0] ++ whichBankMode
+  bankNumbers = (P.take (length bankPress) (map constant [0..])) P.++ [prevBankMode]
+  whichBankMode = case' (map (inputPress ===) bankPress) bankNumbers
 
-getActiveLoopMap :: ParsedInput -> Behavior Word8 -> Behavior LoopMap
-getActiveLoopMap = getLoopModeLoopMap
+getPresetLoopMap :: ParsedInput -> [[Behavior LoopMap]] -> Behavior LoopMap
+getPresetLoopMap inputPress presets = presetLoopMap where
+  prevPresetLoopMap = [0] ++ presetLoopMap :: Behavior LoopMap
+  prevLoc = [0] ++ whichLoc :: Behavior Word8
+  isPresetMode = not $ getIsLoopMode inputPress
+  presetNumbers = (map constant [0..numLocations8]) P.++ [prevLoc]
+  whichLoc = if isPresetMode then case' (map (inputPress ===) pedalPress) presetNumbers else prevLoc
+  bankLoops = map (!! whichLoc) presets
+  whichBankMode = getWhichBankMode inputPress
+  presetLoopMap = bankLoops !! whichBankMode
+
+getActiveLoopMap :: ParsedInput -> Behavior Word8 -> [[Behavior LoopMap]] -> Behavior LoopMap
+getActiveLoopMap inputPress insertLoc presets = if
+  getIsLoopMode inputPress
+  then
+      getLoopModeLoopMap inputPress insertLoc
+      else
+      (getPresetLoopMap inputPress presets)  .|. (getInsertLoopMap insertLoc)

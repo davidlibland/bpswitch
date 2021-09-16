@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8e016c93589d24b32d2c7eafa97aebdf67bb3264fda75ba251a219539fa4c708
+-- hash: 896aefdc631e571737719586578631164bc5ec0edeab6d3deb69c60d70dc07d1
 
 name:           arduino-bpswitch
 version:        0.1.0.0
@@ -35,9 +35,11 @@ library
   hs-source-dirs:
       src
   build-depends:
-      arduino-copilot
+      QuickCheck ==2.14.2
+    , arduino-copilot
     , base >=4.7 && <5
     , copilot-language
+    , hspec ==2.7.8
   default-language: Haskell2010
 
 executable arduino-bpswitch-exe
@@ -48,10 +50,12 @@ executable arduino-bpswitch-exe
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      arduino-bpswitch
+      QuickCheck ==2.14.2
+    , arduino-bpswitch
     , arduino-copilot
     , base >=4.7 && <5
     , copilot-language
+    , hspec ==2.7.8
   default-language: Haskell2010
 
 test-suite arduino-bpswitch-test
@@ -63,8 +67,10 @@ test-suite arduino-bpswitch-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      arduino-bpswitch
+      QuickCheck ==2.14.2
+    , arduino-bpswitch
     , arduino-copilot
     , base >=4.7 && <5
     , copilot-language
+    , hspec ==2.7.8
   default-language: Haskell2010

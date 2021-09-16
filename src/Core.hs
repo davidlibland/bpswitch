@@ -1,5 +1,7 @@
 {-# LANGUAGE RebindableSyntax #-}
-module Core (getActiveLoopMap, LoopMap) where
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MonoLocalBinds #-}
+module Core (getActiveLoopMap, LoopMap, applyLoopMap) where
 
 import Copilot.Arduino.Nano -- Copilot.Arduino.Nano is also available
 import BPSStates
@@ -93,3 +95,9 @@ getActiveLoopMap inputPress insertLoc presets = if
       getLoopModeLoopMap inputPress insertLoc
       else
       (getPresetLoopMap inputPress presets)  .|. (getInsertLoopMap insertLoc)
+
+applyLoopMap :: Output t (Stream Bool) => [t] -> Behavior LoopMap -> Sketch ()
+applyLoopMap [] _ = return ()
+applyLoopMap (pin:pins) loopMap = do
+  pin =: (loopMap .&. constant 1) /= constant 0
+  applyLoopMap pins (loopMap `div` 2)

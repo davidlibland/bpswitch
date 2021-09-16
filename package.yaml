@@ -22,9 +22,10 @@ description:         Please see the README on GitHub at <https://github.com/gith
 dependencies:
 - base >= 4.7 && < 5
 - arduino-copilot
-- copilot-language
-- hspec == 2.7.8
-- QuickCheck == 2.14.2
+#- copilot-language
+#- copilot-theorem
+#- hspec == 2.7.8
+#- QuickCheck == 2.14.2
 
 library:
   source-dirs: src

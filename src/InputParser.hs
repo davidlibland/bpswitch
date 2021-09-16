@@ -41,11 +41,11 @@ counter inc reset = cnt where
     cnt = if reset then 0 else if inc then prev + 1 else prev
     prev = [0] ++ cnt
 
-getInputParser :: Int32 -> [(Behavior Bool)] -> ParsedInput
+getInputParser :: Integral t => t -> [(Behavior Bool)] -> ParsedInput
 getInputParser holdTimeClicks buttons = let
   curentCode = getInputCode buttons
   reset = isReset buttons
   incCounter = anyDown buttons
   count = [0] ++ counter incCounter reset
-  isHeld = count >= constant holdTimeClicks
+  isHeld = count >= constant (fromIntegral holdTimeClicks)
   in ParsedInput reset isHeld curentCode

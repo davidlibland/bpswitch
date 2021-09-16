@@ -1,52 +1,105 @@
---{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RebindableSyntax #-}
 module Main where
+
+import System.Environment
+import qualified Prelude as P
+import Control.Monad (replicateM, forM_)
+
+import Copilot.Arduino.Nano -- Copilot.Arduino.Uno is also available
+import qualified Copilot.Arduino.Library.EEPROMex as EEPROM
+import Copilot.Arduino.Internals
 
 import Core
 import InputParser
 import BPSStates
 
-import Copilot.Arduino.Nano -- Copilot.Arduino.Nano is also available
-import Control.Monad (liftM2)
---import qualified Prelude as P
---import qualified Copilot.Language.Operators.Eq as Ceq
+-- These pins are connected to the loop switches
+loopPins :: [Pin '[ 'DigitalIO]]
+loopPins = [pin2, Pin (PinId 3), pin4, Pin (PinId 5), Pin (PinId 6), pin7, pin8, Pin (PinId 9), Pin (PinId 10)]
 
--- Sum of inputs
-accumulator :: Stream Word8 -> Stream Word8
-accumulator vals = n
-  where n = ([0] ++ n) + vals
-
-
-buttons = [pin2, pin4, pin7]
---buttonInputs :: [Stream Bool]
---buttonInputs = map input buttons
+-- These are the momentary input buttons
+buttonPins = [a0, a1, a2, a3, a4]
 buttonInputs :: [Sketch (Behavior Bool)]
+--buttonInputs = map input buttonPins
+-- This is just some fake input.
 buttonInputs = [
-  input' pin2 [False, True, False, False, False, True, False, False, False, False, True, False, False, True, False],
-  input' pin3 [False, False, True, False, False, True, False, True, False, True, False, True, False, True, False]
-  ]
-  
-presets :: [[Behavior LoopMap]]
-presets = [
-    (map constant [0,0,0,0,0,0,0,0]),
-    (map constant [0,0,0,0,0,0,0,0]),
-    (map constant [0,0,0,0,0,0,0,0])
+  input' a0 [False, True, False, False, False, True, False, False, False, False, True, False, False, True, False],
+  input' a1 [False, False, True, False, False, False, False, True, False, True, False, True, False, True, False]
   ]
 
-main :: IO()
-main = arduino $ do
-  led =: blinking
-  delay =: MilliSeconds( constant 100 )
+-- These are just some fake (blank) presets
+numPresetBanks :: Int
+numPresetBanks = 3
+numPresetsInBank :: Int
+numPresetsInBank = 8
+defaultPresetMap :: LoopMap
+defaultPresetMap = 0
+defaultInsertLoc :: Word8
+defaultInsertLoc = 3
+
+delayMillis :: Word32
+delayMillis = 100
+holdTimeMillis :: Word32
+holdTimeMillis = 3000
+holdClicks :: Word32
+holdClicks = holdTimeMillis `P.div` delayMillis
+
+main :: IO ()
+main = do
+  z <- lookupEnv "ZERO"
+  arduino $ case z of
+    Just "y" -> mainZero
+    _ -> mainReal
+
+
+loadPresetBank :: LoopMap -> Int -> Sketch ([Behavior LoopMap], [EEPROM.Location LoopMap])
+loadPresetBank defVal bankLength = do
+  listOfValsAndLocs <- replicateM bankLength (EEPROM.alloc' (defVal :: LoopMap))
+  return $ P.unzip listOfValsAndLocs
+
+loadPresets :: LoopMap -> Int -> Int -> Sketch ([[Behavior LoopMap]], [[EEPROM.Location LoopMap]])
+loadPresets defVal numBanks bankLength = do
+  listOfTuples <- replicateM numBanks (loadPresetBank defVal bankLength)
+  return $ P.unzip listOfTuples
+
+-- Zero out the EEPROM, in preparation for mainReal.
+mainZero :: Sketch ()
+mainZero = do
+  EEPROM.maxAllowedWrites 10
+
+  -- First Zero-Out the InsertLoc
+  (_, insertLocEEPROMLoc) <- EEPROM.alloc' (defaultInsertLoc :: Word8)
+  insertLocEEPROMLoc =: constant (defaultInsertLoc :: Word8) @: firstIteration
+
+  -- Next Zero-Out the presets
+  (_, presetBanks) <- loadPresets defaultPresetMap numPresetBanks numPresetsInBank
+  -- Iterate over the banks
+  forM_ presetBanks $ \presetBank -> do
+    -- Iterate over the presets in each bank
+    forM_ presetBank $ \eepromLoc -> do
+      eepromLoc =: constant (defaultPresetMap :: LoopMap) @: firstIteration
+
+
+-- The actual code to run:
+mainReal :: Sketch ()
+mainReal = do
+  delay =: MilliSeconds( constant delayMillis )
   inputs <- sequenceA buttonInputs
---  reset <- isReset <$> sequenceA buttonInputs
---  rollingCode <- getRollingCode <$> sequenceA buttonInputs
-  let parsedInput = getInputParser 2 inputs
 
-  p1 <- input' pin2 [False, True, False, False, False, True, False, False, False, False, True, False, False]
-  p2 <- input' pin3 [False, False, True, False, False, True, False, True, False, True, False, True, False]
+  -- Read the long-term state from the EEPRom
+  (insertLoc, insertLocEEPROMLoc) <- EEPROM.alloc' (defaultInsertLoc :: Word8)
+  (presetVals, presetLocs) <- loadPresets defaultPresetMap numPresetBanks numPresetsInBank
 
-  pin8 =: submitted parsedInput
-  pin9 =: held parsedInput
-  pin10 =: pwm (code parsedInput)
-  
-  pin11 =: pwm (getActiveLoopMap parsedInput (constant 3) presets)
+  -- Parse the input
+  let parsedInput = getInputParser holdClicks inputs
+
+  -- Some diagnostic output:
+  pin13 =: submitted parsedInput
+  -- The main led blinks whenever an input is submitted
+  pin12 =: held parsedInput
+  -- pin12 blinks on a "held" input (e.g. a save).
+
+  -- Apply the input to activate the correct loops
+  let loopMap = getActiveLoopMap parsedInput insertLoc presetVals
+  applyLoopMap loopPins loopMap

@@ -21,16 +21,14 @@ loopPins = [pin2, Pin (PinId 3), pin4, Pin (PinId 5), Pin (PinId 6), pin7, pin8,
 -- These are the momentary input buttons
 buttonPins = [a0, a1, a2, a3, a4]
 buttonInputs :: [Sketch (Behavior Bool)]
---buttonInputs = map input buttonPins
+buttonInputs = map input buttonPins
 -- This is just some fake input.
-buttonInputs = [
-  input' a0 [False, True, False, False, False, True, False, False, False, False, True, False, False, True, False],
-  input' a1 [False, False, True, False, False, False, False, True, False, True, False, True, False, True, False]
-  ]
+--buttonInputs = [
+--  input' a0 [False, True, False, False, False, True, False, False, False, False, True, False, False, True, False],
+--  input' a1 [False, False, True, False, False, False, False, True, False, True, False, True, False, True, False]
+--  ]
 
 -- These are just some fake (blank) presets
-numPresetBanks :: Int
-numPresetBanks = 3
 numPresetsInBank :: Int
 numPresetsInBank = 8
 defaultPresetMap :: LoopMap
@@ -58,11 +56,6 @@ loadPresetBank defVal bankLength = do
   listOfValsAndLocs <- replicateM bankLength (EEPROM.alloc' (defVal :: LoopMap))
   return $ P.unzip listOfValsAndLocs
 
-loadPresets :: LoopMap -> Int -> Int -> Sketch ([[Behavior LoopMap]], [[EEPROM.Location LoopMap]])
-loadPresets defVal numBanks bankLength = do
-  listOfTuples <- replicateM numBanks (loadPresetBank defVal bankLength)
-  return $ P.unzip listOfTuples
-
 -- Zero out the EEPROM, in preparation for mainReal.
 mainZero :: Sketch ()
 mainZero = do
@@ -73,23 +66,22 @@ mainZero = do
   insertLocEEPROMLoc =: constant (defaultInsertLoc :: Word8) @: firstIteration
 
   -- Next Zero-Out the presets
-  (_, presetBanks) <- loadPresets defaultPresetMap numPresetBanks numPresetsInBank
-  -- Iterate over the banks
-  forM_ presetBanks $ \presetBank -> do
-    -- Iterate over the presets in each bank
-    forM_ presetBank $ \eepromLoc -> do
-      eepromLoc =: constant (defaultPresetMap :: LoopMap) @: firstIteration
+  (_, presetLocs) <- loadPresetBank defaultPresetMap numPresetsInBank
+  forM_ presetLocs $ \eepromLoc -> do
+    eepromLoc =: constant (defaultPresetMap :: LoopMap) @: firstIteration
 
 
 -- The actual code to run:
 mainReal :: Sketch ()
 mainReal = do
+--  EEPROM.maxAllowedWrites 10
   delay =: MilliSeconds( constant delayMillis )
   inputs <- sequenceA buttonInputs
 
   -- Read the long-term state from the EEPRom
-  (insertLoc, insertLocEEPROMLoc) <- EEPROM.alloc' (defaultInsertLoc :: Word8)
-  (presetVals, presetLocs) <- loadPresets defaultPresetMap numPresetBanks numPresetsInBank
+--  (insertLoc, insertLocEEPROMLoc) <- EEPROM.alloc' (defaultInsertLoc :: Word8)
+  let insertLoc = constant defaultInsertLoc
+  (presetVals, presetLocs) <- loadPresetBank defaultPresetMap numPresetsInBank
 
   -- Parse the input
   let parsedInput = getInputParser holdClicks inputs

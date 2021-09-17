@@ -8,8 +8,6 @@ import BPSStates
 import InputParser
 import qualified Prelude as P
 
---import Prelude hiding ((>), (^))
-
 type LoopMap = Word16
 
 buildConst :: Bool -> [Bool] -> ParsedInput
@@ -27,8 +25,6 @@ loc7 = [True, True, False, False, False]
 
 locations :: [[Bool]]
 locations = [loc0, loc1, loc2, loc3, loc4, loc5, loc6, loc7]
---locationCodes :: [Word8]
---locationCodes = map (foldl1 (\x y -> 2*x+y)) $ map (map (\b-> if b then 1 else 0)) locations
 numLocations = length locations
 numLocations8 :: Word8
 numLocations8 = fromIntegral numLocations
@@ -44,9 +40,11 @@ modePress = buildConst False [True, False, False, False, False]
 raisePastInsert :: Word8 -> Behavior Word8 -> Behavior LoopMap
 raisePastInsert i insertLoc = if insertLoc > constant i then constant (2P.^i) else constant 2P.^(i+1)
 
-getInputLoopMap :: ParsedInput -> Behavior Word8 -> Behavior LoopMap
-getInputLoopMap inputPress insertLoc = case' (map (inputPress ===) pedalPress) ([raisePastInsert i insertLoc| i<-[0..8]]P.++[constant 0])
+getInsertShiftedLoopMaps :: Behavior Word8 -> [Behavior LoopMap]
+getInsertShiftedLoopMaps insertLoc = ([raisePastInsert i insertLoc| i<-[0..(numLocations8-1)]]P.++[constant 0])
 
+getInputLoopMap :: ParsedInput -> Behavior Word8 -> Behavior LoopMap
+getInputLoopMap inputPress insertLoc = case' (map (inputPress ===) pedalPress) (getInsertShiftedLoopMaps insertLoc)
 
 getInsertLoopMap :: Behavior Word8 -> Behavior LoopMap
 getInsertLoopMap insertLoc = (constant 2)^insertLoc
@@ -67,14 +65,13 @@ getLoopModeLoopMap inputPress insertLoc = activeLoopMap where
 getPresetLoopMap :: ParsedInput -> [Behavior LoopMap] -> Behavior LoopMap
 getPresetLoopMap inputPress presets = presetLoopMap where
   prevPresetLoopMap = [0] ++ presetLoopMap :: Behavior LoopMap
-  prevLoc = [0] ++ whichLoc :: Behavior Word8
   isPresetMode = not $ getIsLoopMode inputPress
-  presetNumbers = (map constant [0..numLocations8]) P.++ [prevLoc]
-  whichLoc = if isPresetMode then case' (map (inputPress ===) pedalPress) presetNumbers else prevLoc
-  presetLoopMap = presets !! whichLoc
+  presetsExt = presets P.++ [prevPresetLoopMap]
+  presetLoopMap = if isPresetMode then case' (map (inputPress ===) pedalPress) presetsExt else prevPresetLoopMap
 
 getActiveLoopMap :: ParsedInput -> Behavior Word8 -> [Behavior LoopMap] -> Behavior LoopMap
-getActiveLoopMap inputPress insertLoc presets = if
+getActiveLoopMap inputPress insertLoc presets =
+  if
   getIsLoopMode inputPress
   then
       getLoopModeLoopMap inputPress insertLoc

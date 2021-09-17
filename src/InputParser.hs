@@ -9,9 +9,6 @@ import BPSStates
 anyDown :: [Behavior Bool] -> Behavior Bool
 anyDown = foldl1 (||)
 
---firstDown :: [Behavior Bool] -> Behavior Bool
---firstDown buttons = (anyDown buttons) && not ([False] ++ (anyDown buttons))
-
 isReset :: [Behavior Bool] -> Behavior Bool
 isReset buttons = not (anyDown buttons) && ([False] ++ (anyDown buttons))
 
@@ -43,9 +40,9 @@ counter inc reset = cnt where
 
 getInputParser :: Integral t => t -> [(Behavior Bool)] -> ParsedInput
 getInputParser holdTimeClicks buttons = let
-  curentCode = getInputCode buttons
+  currentCode = getInputCode buttons
   reset = isReset buttons
   incCounter = anyDown buttons
   count = [0] ++ counter incCounter reset
   isHeld = count >= constant (fromIntegral holdTimeClicks)
-  in ParsedInput reset isHeld curentCode
+  in ParsedInput reset isHeld currentCode

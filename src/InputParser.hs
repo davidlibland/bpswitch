@@ -1,6 +1,6 @@
 {-# LANGUAGE RebindableSyntax #-}
 module InputParser
-    (getInputParser, getInstantCode) where
+    (getInputParser, getCodeFromDigits) where
 
 import Copilot.Arduino.Nano -- Copilot.Arduino.Nano is also available
 import BPSStates
@@ -15,11 +15,11 @@ isReset buttons = not (anyDown buttons) && ([False] ++ (anyDown buttons))
 toInt :: Behavior Bool -> Behavior InputCode
 toInt x = if x then 1 else 0
 
-fromDigits :: [Behavior InputCode] -> Behavior InputCode
-fromDigits = foldl1 (\x y -> 2*x+y)
+getCodeFromDigits :: Num a => [a] -> a
+getCodeFromDigits = foldl1 (\x y -> 2*x+y)
 
 getInstantCode :: [Behavior Bool] -> Behavior InputCode
-getInstantCode = fromDigits . map toInt
+getInstantCode = getCodeFromDigits . map toInt
 
 getRollingCode :: [Behavior Bool] -> Behavior InputCode
 getRollingCode x = rollingCode

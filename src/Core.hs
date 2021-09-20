@@ -10,8 +10,8 @@ import qualified Prelude as P
 
 type LoopMap = Word16
 
-buildConst :: Bool -> [Bool] -> ParsedInput
-buildConst isHeld binCode = ParsedInput (constant True) (constant isHeld) (getInstantCode (map constant binCode))
+buildInputCode :: [Bool] -> InputCode
+buildInputCode binCode = (getCodeFromDigits (map (fromIntegral . fromEnum) binCode))
 
 -- Locations:
 loc0 = [False, False, False, False, True]
@@ -31,53 +31,58 @@ locationLoopMaps :: [Behavior LoopMap]
 locationLoopMaps = map constant $ (map (2P.^) [0..numLocations]) P.++ [0]
 
 -- Pedals
-pedalPress :: [ParsedInput]
-pedalPress = map (buildConst False) locations
+pedalPress :: [Behavior InputCode]
+pedalPress = map (constant . buildInputCode) locations
 
 -- Control
-insertPress = buildConst True [True, True, True, True, True]
-modePress = buildConst False [True, False, False, False, False]
+insertPressCode = buildInputCode [True, True, True, True, True]
+modePress = constant $ buildInputCode [True, False, False, False, False]
 
-getInputLoopMap :: ParsedInput -> Behavior LoopMap
-getInputLoopMap inputPress = case' (map (inputPress ===) pedalPress) locationLoopMaps
+getInputLoopMap :: Behavior InputCode -> Behavior LoopMap
+getInputLoopMap inputCode = case' (map (inputCode ==) pedalPress) locationLoopMaps
 
 getInsertLoopMap :: Behavior Word8 -> Behavior LoopMap
 getInsertLoopMap insertLoc = (constant 2)^insertLoc
 
-getIsLoopMode :: ParsedInput -> Behavior Bool
-getIsLoopMode inputPress = isLoopMode where
+getIsLoopMode :: Behavior InputCode -> Behavior Bool
+getIsLoopMode inputCode = isLoopMode where
   prevIsLoopMode = [True] ++ isLoopMode
-  isLoopMode = (inputPress === modePress) `xor` prevIsLoopMode
+  isLoopMode = (inputCode == modePress) `xor` prevIsLoopMode
 
-getLoopModeLoopMap :: ParsedInput -> Behavior LoopMap
-getLoopModeLoopMap inputPress = pedalLoopMap where
+getLoopModeLoopMap :: Behavior InputCode -> Behavior LoopMap
+getLoopModeLoopMap inputCode = pedalLoopMap where
   prevPedalLoopMap = [0] ++ pedalLoopMap
-  isLoopMode = getIsLoopMode inputPress
-  toggleCode = if isLoopMode then getInputLoopMap inputPress else constant 0
+  isLoopMode = getIsLoopMode inputCode
+  toggleCode = if isLoopMode then getInputLoopMap inputCode else constant 0
   pedalLoopMap = toggleCode .^. prevPedalLoopMap
 
-getPresetLoopMap :: ParsedInput -> [Behavior LoopMap] -> Behavior LoopMap
-getPresetLoopMap inputPress presets = presetLoopMap where
+getPresetLoopMap :: Behavior InputCode -> [Behavior LoopMap] -> Behavior LoopMap
+getPresetLoopMap inputCode presets = presetLoopMap where
   prevPresetLoopMap = [0] ++ presetLoopMap :: Behavior LoopMap
-  isPresetMode = not $ getIsLoopMode inputPress
+  isPresetMode = not $ getIsLoopMode inputCode
   presetsExt = presets P.++ [prevPresetLoopMap]
-  presetLoopMap = if isPresetMode then case' (map (inputPress ===) pedalPress) presetsExt else prevPresetLoopMap
+  presetLoopMap = if isPresetMode then case' (map (inputCode ==) pedalPress) presetsExt else prevPresetLoopMap
 
 getActiveLoopMap :: ParsedInput -> Behavior Word8 -> [Behavior LoopMap] -> Behavior LoopMap
-getActiveLoopMap inputPress insertLoc presets = addInsert insertLoc $
-  if
-  getIsLoopMode inputPress
-  then
-      getLoopModeLoopMap inputPress
-      else
-      (getPresetLoopMap inputPress presets)
+getActiveLoopMap inputPress insertLoc presets = addInsert insertLoc activeLoopMap
+  where
+    inputCode = code inputPress
+    prevLoopMap = [0] ++ activeLoopMap
+    activeLoopMap = if submitted inputPress && not (held inputPress) then
+        if
+        getIsLoopMode inputCode
+        then
+            getLoopModeLoopMap inputCode
+            else
+            getPresetLoopMap inputCode presets
+      else prevLoopMap
 
 addInsert :: Behavior Word8 -> Behavior LoopMap -> Behavior LoopMap
 addInsert insertLoc loopMap = let
   insertLoopMap = getInsertLoopMap insertLoc
   right = loopMap `mod` insertLoopMap
   left = (loopMap `div` insertLoopMap) * insertLoopMap * 2
-  in left .|. insertLoopMap .|. right 
+  in left .|. insertLoopMap .|. right
 
 applyLoopMap :: Output t (Stream Bool) => [t] -> Behavior LoopMap -> Sketch ()
 applyLoopMap [] _ = return ()

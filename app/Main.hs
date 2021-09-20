@@ -6,6 +6,7 @@ import System.Environment
 import qualified Prelude as P
 import Control.Monad (replicateM, forM_)
 
+import Copilot.Arduino
 import Copilot.Arduino.Nano -- Copilot.Arduino.Uno is also available
 import qualified Copilot.Arduino.Library.EEPROMex as EEPROM
 import Copilot.Arduino.Internals
@@ -21,12 +22,12 @@ loopPins = [pin2, Pin (PinId 3), pin4, Pin (PinId 5), Pin (PinId 6), pin7, pin8,
 -- These are the momentary input buttons
 buttonPins = [a0, a1, a2, a3, a4]
 buttonInputs :: [Sketch (Behavior Bool)]
-buttonInputs = map input buttonPins
+--buttonInputs = map input buttonPins
 -- This is just some fake input.
---buttonInputs = [
---  input' a0 [False, True, False, False, False, True, False, False, False, False, True, False, False, True, False],
---  input' a1 [False, False, True, False, False, False, False, True, False, True, False, True, False, True, False]
---  ]
+buttonInputs = [
+  input' a0 [False, True, False, False, False, True, False, False, False, False, True, False, False, True, False],
+  input' a1 [False, False, True, False, False, False, False, True, False, True, False, True, False, True, False]
+  ]
 
 -- These are just some fake (blank) presets
 numPresetsInBank :: Int

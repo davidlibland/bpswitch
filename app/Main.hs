@@ -22,12 +22,12 @@ loopPins = [pin2, Pin (PinId 3), pin4, Pin (PinId 5), Pin (PinId 6), pin7, pin8,
 -- These are the momentary input buttons
 buttonPins = [a0, a1, a2, a3, a4]
 buttonInputs :: [Sketch (Behavior Bool)]
---buttonInputs = map input buttonPins
+buttonInputs = map input buttonPins
 -- This is just some fake input.
-buttonInputs = [
-  input' a0 [False, True, False, False, False, True, False, False, False, False, True, False, False, True, False],
-  input' a1 [False, False, True, False, False, False, False, True, False, True, False, True, False, True, False]
-  ]
+--buttonInputs = [
+--  input' a0 [False, True, False, False, False, True, False, False, False, False, True, False, False, True, False],
+--  input' a1 [False, False, True, False, False, False, False, True, False, True, False, True, False, True, False]
+--  ]
 
 -- These are just some fake (blank) presets
 numPresetsInBank :: Int
@@ -38,7 +38,7 @@ defaultInsertLoc :: Word8
 defaultInsertLoc = 3
 
 delayMillis :: Word32
-delayMillis = 100
+delayMillis = 300
 holdTimeMillis :: Word32
 holdTimeMillis = 3000
 holdClicks :: Word32
@@ -90,9 +90,10 @@ mainReal = do
   -- Some diagnostic output:
   pin13 =: submitted parsedInput
   -- The main led blinks whenever an input is submitted
-  pin12 =: held parsedInput
+  pin12 =: held parsedInput || getIsInsertMoveMode parsedInput
   -- pin12 blinks on a "held" input (e.g. a save).
 
   -- Apply the input to activate the correct loops
   let loopMap = getActiveLoopMap parsedInput insertLoc presetVals
   applyLoopMap loopPins loopMap
+  applyPresets parsedInput insertLoc presetLocs

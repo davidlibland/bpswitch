@@ -45,4 +45,5 @@ getInputParser holdTimeClicks buttons = let
   incCounter = anyDown buttons
   count = [0] ++ counter incCounter reset
   isHeld = count >= constant (fromIntegral holdTimeClicks)
-  in ParsedInput reset isHeld currentCode
+  wasHeld = [False] ++ isHeld
+  in ParsedInput reset wasHeld currentCode

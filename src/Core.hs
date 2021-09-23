@@ -1,9 +1,10 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonoLocalBinds #-}
-module Core (getActiveLoopMap, LoopMap, applyLoopMap) where
+module Core (getActiveLoopMap, LoopMap, applyLoopMap, applyPresets, getIsInsertMoveMode) where
 
 import Copilot.Arduino.Nano -- Copilot.Arduino.Nano is also available
+import qualified Copilot.Arduino.Library.EEPROMex as EEPROM
 import BPSStates
 import InputParser
 import qualified Prelude as P
@@ -28,7 +29,7 @@ locations = [loc0, loc1, loc2, loc3, loc4, loc5, loc6, loc7]
 numLocations :: Word8
 numLocations = fromIntegral $ length locations
 locationLoopMaps :: [Behavior LoopMap]
-locationLoopMaps = map constant $ (map (2P.^) [0..numLocations]) P.++ [0]
+locationLoopMaps = map constant $ (map (2P.^) [0..(numLocations-1)]) P.++ [0]
 
 -- Pedals
 pedalPress :: [Behavior InputCode]
@@ -68,9 +69,10 @@ getActiveLoopMap inputPress insertLoc presets = addInsert insertLoc activeLoopMa
   where
     inputCode = code inputPress
     prevLoopMap = [0] ++ activeLoopMap
+    isInsertMoveMode = getIsInsertMoveMode inputPress
     activeLoopMap = if submitted inputPress && not (held inputPress) then
         if
-        getIsLoopMode inputCode
+        not isInsertMoveMode && getIsLoopMode inputCode
         then
             getLoopModeLoopMap inputCode
             else
@@ -89,3 +91,27 @@ applyLoopMap [] _ = return ()
 applyLoopMap (pin:pins) loopMap = do
   pin =: (loopMap .&. constant 1) /= constant 0
   applyLoopMap pins (loopMap `div` 2)
+  
+applyPresets :: ParsedInput -> Behavior Word8 -> [EEPROM.Location LoopMap] -> Sketch ()
+applyPresets inputPress insertLoc presetLocs = do
+  let inputCode = code inputPress
+  let isInsertMoveMode = getIsInsertMoveMode inputPress
+  let isLoopMode = getIsLoopMode inputCode
+  let isSave = held inputPress && submitted inputPress && isLoopMode && not isInsertMoveMode
+  let loopMap = addInsert insertLoc $ getLoopModeLoopMap inputCode
+  let actions = [(presetLocs P.!! i) =: loopMap @: isSave| i<-[0..7]]
+  if isSave then case'' (map (inputCode ==) pedalPress) actions else return ()
+
+case'' :: [Behavior Bool] -> [Sketch ()] -> Sketch ()
+case'' cases actions = let 
+  caseActionPairs = zip cases actions
+  doFirst [] = return ()
+  doFirst ((shouldDo, action):caseActions) = if shouldDo then action else doFirst caseActions
+  in doFirst caseActionPairs
+
+getIsInsertMoveMode :: ParsedInput -> Behavior Bool
+getIsInsertMoveMode inputPress = moveInsertMode where
+  prevMoveInsertMode = [False] ++ moveInsertMode
+  wasSubmitted = [False] ++ submitted inputPress
+  pressedMoveInsert = submitted inputPress && held inputPress && code inputPress == constant insertPressCode
+  moveInsertMode = (pressedMoveInsert || (wasSubmitted && prevMoveInsertMode)) `xor` prevMoveInsertMode

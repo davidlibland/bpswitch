@@ -80,8 +80,8 @@ mainReal = do
   inputs <- sequenceA buttonInputs
 
   -- Read the long-term state from the EEPRom
---  (insertLoc, insertLocEEPROMLoc) <- EEPROM.alloc' (defaultInsertLoc :: Word8)
-  let insertLoc = constant defaultInsertLoc
+  (insertLoc, insertLocEEPROMLoc) <- EEPROM.alloc' (defaultInsertLoc :: Word8)
+--  let insertLoc = constant defaultInsertLoc
   (presetVals, presetLocs) <- loadPresetBank defaultPresetMap numPresetsInBank
 
   -- Parse the input
@@ -90,10 +90,12 @@ mainReal = do
   -- Some diagnostic output:
   pin13 =: submitted parsedInput
   -- The main led blinks whenever an input is submitted
-  pin12 =: held parsedInput || getIsInsertMoveMode parsedInput
+  pin12 =: held parsedInput
   -- pin12 blinks on a "held" input (e.g. a save).
 
-  -- Apply the input to activate the correct loops
-  let loopMap = getActiveLoopMap parsedInput insertLoc presetVals
-  applyLoopMap loopPins loopMap
-  applyPresets parsedInput insertLoc presetLocs
+  coreLoop parsedInput (insertLoc, insertLocEEPROMLoc) (presetVals, presetLocs) loopPins
+
+--  -- Apply the input to activate the correct loops
+--  let loopMap = getActiveLoopMap parsedInput insertLoc presetVals
+--  applyLoopMap loopPins loopMap
+--  applyPresets parsedInput insertLoc presetLocs
